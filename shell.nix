@@ -13,6 +13,7 @@ let
     requirements = ''
       cython
       aiohttp
+      psycopg2
       toml
     '';
 

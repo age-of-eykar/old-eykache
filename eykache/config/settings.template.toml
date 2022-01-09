@@ -2,5 +2,12 @@
 port = "8080" 
 request_max_size = 100000000 # 100 MB
 
+[database]
+database = "eykache"
+user = "eykache"
+password = "XXXXXXX"
+host = "localhost"
+port = 5432
+
 [updater]
 delay = 5 # 5 seconds

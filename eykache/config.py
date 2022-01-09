@@ -5,7 +5,6 @@ import utils
 
 
 class Config:
-
     def extract(self, file_name, template_name):
         config_file = utils.get_path(file_name)
         if not os.path.isfile(config_file):
