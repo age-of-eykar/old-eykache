@@ -17,7 +17,7 @@ let
       toml
       tqdm
       websockets>=9.1,<10
-    '';
+    ''; # todo: support ipfshttpclient==0.8.0a2
     packagesExtra = [ ./web3.py ];
 
     providers = { _default = "nixpkgs,sdist,wheel"; };
