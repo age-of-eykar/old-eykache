@@ -1,3 +1,3 @@
 from . import config
-from . import updater
+from . import link
 from . import utils

@@ -15,9 +15,12 @@ let
       aiohttp
       psycopg2
       toml
+      tqdm
+      websockets>=9.1,<10
     '';
+    packagesExtra = [ ./web3.py ];
 
-    providers = { _default = "nixpkgs,wheel,sdist"; };
+    providers = { _default = "nixpkgs,sdist,wheel"; };
     ignoreCollisions = true;
   };
 in mach-nix.nixpkgs.mkShell { buildInputs = [ pyEnv ]; }

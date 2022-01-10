@@ -1,9 +1,9 @@
-from config import TomlConfig
-from db import Database
+from .config import TomlConfig
+from .db import Database
 from aiohttp import web
 import asyncio
-import server
-import updater
+from . import server
+from . import link
 
 
 async def main():
@@ -19,8 +19,9 @@ async def main():
     runner = web.AppRunner(app)
     await runner.setup()
     await web.TCPSite(runner, port=config["server"]["port"]).start()
-    await updater.start(database, config)
+    await link.start(database, config)
     await asyncio.Event().wait()
+    database.close()
 
 
 asyncio.run(main())

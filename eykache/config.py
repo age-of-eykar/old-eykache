@@ -1,7 +1,7 @@
 import os
 import toml
 import shutil
-import utils
+from . import utils
 
 
 class Config:

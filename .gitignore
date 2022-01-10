@@ -1,4 +1,6 @@
 settings.toml
+web3.py
+web3.py/*
 
 *.pyc
 *.pyo
