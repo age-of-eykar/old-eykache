@@ -1,10 +1,15 @@
 import time
 import logging
 import json
+import requests
 from . import utils
 from web3 import Web3
 from .scanner import DatabasedState, EventScanner, ChainFinished
 from tqdm import tqdm
+from web3.middleware import geth_poa_middleware  # only needed for PoA networks like BSC
+from websockets import connect
+import asyncio
+import traceback
 
 
 async def start(database, config):
@@ -12,6 +17,7 @@ async def start(database, config):
     contract_content = open(utils.get_path("Eykar.json"), "r").read()
     logging.basicConfig(level=logging.INFO)
     web3.middleware_onion.clear()
+    web3.middleware_onion.inject(geth_poa_middleware, layer=0)
     abi = json.loads(contract_content)["abi"]
     Eykar = web3.eth.contract(abi=abi)
 
@@ -67,7 +73,7 @@ async def start(database, config):
             )
             progress_bar.update(chunk_size)
 
-        # handle event
+        # handle old events
         try:
             await scanner.scan(
                 start_block, end_block, progress_callback=_update_progress
@@ -78,3 +84,46 @@ async def start(database, config):
     state.save()
     duration = time.time() - start
     print(f"Scan last {duration} seconds")
+
+    # listen to new events
+    while True:
+        await get_event(config, state)
+        await asyncio.sleep(0)
+
+
+async def get_event(config, state):
+    async with connect(config["blockchain"]["node_wss"]) as ws:
+        await ws.send(
+            json.dumps(
+                {
+                    "id": 1,
+                    "method": "eth_subscribe",
+                    "params": [
+                        "logs",
+                        {
+                            "address": [config["blockchain"]["contract_address"]],
+                        },
+                    ],
+                }
+            )
+        )
+        while True:
+            try:
+                message = json.loads(await asyncio.wait_for(ws.recv(), timeout=60))
+                log = message["params"]["result"]
+                location = log["topics"][1]
+                x = int.from_bytes(bytes.fromhex(location[2:18]), "big", signed=True)
+                y = int.from_bytes(bytes.fromhex(location[18:]), "big", signed=True)
+                colony_id = int.from_bytes(
+                    bytes.fromhex(log["data"][2:66]), "big", signed=False
+                )
+                event = (
+                    log["logIndex"],
+                    log["transactionHash"],
+                    log["blockNumber"],
+                    {"location": (x, y), "colony_id": colony_id},
+                )
+                state.process_event(event)
+                pass
+            except Exception as e:
+                traceback.print_exc()

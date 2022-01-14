@@ -48,9 +48,7 @@ class EventScannerState(ABC):
         """
 
     @abstractmethod
-    def process_event(
-        self, block_when: datetime.datetime, event: AttributeDict
-    ) -> object:
+    def process_event(self, event: AttributeDict) -> object:
         """Process incoming events.
 
         This function takes raw events from Web3, transforms them to your application internal
@@ -228,7 +226,7 @@ class EventScanner:
                 "Processing event %s, block:%d count:%d",
                 data,
             )
-            processed = self.state.process_event(block_when, evt)
+            processed = self.state.process_event(evt)
             all_processed.append(processed)
 
         end_block_timestamp = get_block_when(end_block)
@@ -299,7 +297,7 @@ class EventScanner:
 
         while current_block <= end_block:
 
-            await asyncio.sleep(0.05)  # let's keep up
+            await asyncio.sleep(0)  # let's keep up
 
             self.state.start_chunk(current_block, chunk_size)
 
@@ -520,7 +518,7 @@ class DatabasedState(EventScannerState):
         if time.time() - self.last_save > 15:
             self.save()
 
-    def process_event(self, block_when: datetime.datetime, event: AttributeDict) -> str:
+    def process_event(self, event: AttributeDict) -> str:
         """Record a plot change in our database."""
         # Events are keyed by their transaction hash and log index
         # One transaction may contain multiple events
