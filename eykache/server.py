@@ -1,4 +1,5 @@
 from aiohttp import web
+import re
 
 
 def setup(app, config, database):
@@ -19,13 +20,27 @@ class Routes:
         web.run_app(self.app)
 
     async def colonies(self, request):
-        print(type(request))
         """
         Allow to test the connection
             Test: curl http://localhost:8080/colonies
-        
+
             Parameters:
                 self (Routes): An instance of Routes
                 request (aiohttp.web_request.Request): The web request
         """
-        return web.Response(body="It seems to be working...")
+        data = await request.json()
+        xmin, ymin, xmax, ymax = (
+            int(data["xmin"]),
+            int(data["ymin"]),
+            int(data["xmax"]),
+            int(data["ymax"]),
+        )
+        output = []
+        for pack in self.database.get_plots(xmin, ymin, xmax, ymax):
+            colony_id, point_str = pack
+            for point in re.findall("(-*[0-9]+ -*[0-9]+)", point_str):
+                x, y = point.split(" ")
+                output.append({"colony_id": colony_id, "x": int(x), "y": int(y)})
+                break
+
+        return web.json_response(output)

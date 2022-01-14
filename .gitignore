@@ -1,4 +1,6 @@
 settings.toml
+Eykar.json
+state.json
 web3.py
 web3.py/*
 
