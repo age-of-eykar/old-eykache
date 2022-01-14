@@ -3,7 +3,7 @@ import logging
 import json
 from . import utils
 from web3 import Web3
-from .scanner import DatabasedState, EventScanner
+from .scanner import DatabasedState, EventScanner, ChainFinished
 from tqdm import tqdm
 
 
@@ -26,8 +26,10 @@ async def start(database, config):
         state=state,
         events=[Eykar.events.PlotChange],
         filters={"address": config["blockchain"]["contract_address"]},
+        max_request_retries=5,
         # How many maximum blocks at the time we request from JSON-RPC
         # and we are unlikely to exceed the response size limit of the JSON-RPC server
+        request_retry_seconds=6.0,
         max_chunk_scan_size=10000,
     )
 
@@ -65,13 +67,14 @@ async def start(database, config):
             )
             progress_bar.update(chunk_size)
 
-        # Run the scan
-        result, total_chunks_scanned = scanner.scan(
-            start_block, end_block, progress_callback=_update_progress
-        )
+        # handle event
+        try:
+            await scanner.scan(
+                start_block, end_block, progress_callback=_update_progress
+            )
+        except ChainFinished:
+            pass
 
     state.save()
     duration = time.time() - start
-    print(
-        f"Scanned total {len(result)} Transfer events, in {duration} seconds, total {total_chunks_scanned} chunk scans performed"
-    )
+    print(f"Scan last {duration} seconds")

@@ -1,5 +1,6 @@
 import datetime
 import time
+import asyncio
 import logging
 from abc import ABC, abstractmethod
 from typing import Tuple, Optional, Callable, List, Iterable
@@ -16,6 +17,10 @@ from web3._utils.filters import construct_event_filter_params
 import json
 
 logger = logging.getLogger(__name__)
+
+
+class ChainFinished(Exception):
+    pass
 
 
 class EventScannerState(ABC):
@@ -86,7 +91,7 @@ class EventScanner:
         filters: {},
         max_chunk_scan_size: int = 10000,
         max_request_retries: int = 30,
-        request_retry_seconds: float = 3.0,
+        request_retry_seconds: float = 12.0,
     ):
         """
         :param contract: Contract
@@ -163,7 +168,9 @@ class EventScanner:
         # todo: remove potentially forked block data from database
         pass
 
-    def scan_chunk(self, start_block, end_block) -> Tuple[int, datetime.datetime, list]:
+    async def scan_chunk(
+        self, start_block, end_block
+    ) -> Tuple[int, datetime.datetime, list]:
         """Read and process events between to block numbers.
 
         Dynamically decrease the size of the chunk if the case JSON-RPC server pukes out.
@@ -197,7 +204,8 @@ class EventScanner:
 
             # Do `n` retries on `eth_getLogs`,
             # throttle down block range if needed
-            end_block, events = _retry_web3_call(
+            end_block, events = await _retry_web3_call(
+                self.web3,
                 _fetch_events,
                 start_block=start_block,
                 end_block=end_block,
@@ -205,23 +213,23 @@ class EventScanner:
                 delay=self.request_retry_seconds,
             )
 
-            for evt in events:
-                idx, txhash, block_number, data = evt
+        for evt in events:
+            idx, txhash, block_number, data = evt
 
-                # We cannot avoid minor chain reorganisations, but
-                # at least we must avoid blocks that are not mined yet
-                assert idx is not None, "Somehow tried to scan a pending block"
+            # We cannot avoid minor chain reorganisations, but
+            # at least we must avoid blocks that are not mined yet
+            assert idx is not None, "Somehow tried to scan a pending block"
 
-                # Get UTC time when this event happened (block mined timestamp)
-                # from our in-memory cache
-                block_when = get_block_when(block_number)
+            # Get UTC time when this event happened (block mined timestamp)
+            # from our in-memory cache
+            block_when = get_block_when(block_number)
 
-                logger.debug(
-                    "Processing event %s, block:%d count:%d",
-                    data,
-                )
-                processed = self.state.process_event(block_when, evt)
-                all_processed.append(processed)
+            logger.debug(
+                "Processing event %s, block:%d count:%d",
+                data,
+            )
+            processed = self.state.process_event(block_when, evt)
+            all_processed.append(processed)
 
         end_block_timestamp = get_block_when(end_block)
         return end_block, end_block_timestamp, all_processed
@@ -255,7 +263,7 @@ class EventScanner:
         current_chuck_size = min(self.max_scan_chunk_size, current_chuck_size)
         return int(current_chuck_size)
 
-    def scan(
+    async def scan(
         self,
         start_block,
         end_block,
@@ -291,6 +299,8 @@ class EventScanner:
 
         while current_block <= end_block:
 
+            await asyncio.sleep(0.05)  # let's keep up
+
             self.state.start_chunk(current_block, chunk_size)
 
             # Print some diagnostics to logs to try to fiddle with real world JSON-RPC API performance
@@ -305,7 +315,7 @@ class EventScanner:
             )
 
             start = time.time()
-            actual_end_block, end_block_timestamp, new_entries = self.scan_chunk(
+            actual_end_block, end_block_timestamp, new_entries = await self.scan_chunk(
                 current_block, estimated_end_block
             )
 
@@ -337,7 +347,9 @@ class EventScanner:
         return all_processed, total_chunks_scanned
 
 
-def _retry_web3_call(func, start_block, end_block, retries, delay) -> Tuple[int, list]:
+async def _retry_web3_call(
+    web3, func, start_block, end_block, retries, delay
+) -> Tuple[int, list]:
     """A custom retry loop to throttle down block range.
 
     If our JSON-RPC server cannot serve all incoming `eth_getLogs` in a single request,
@@ -352,6 +364,7 @@ def _retry_web3_call(func, start_block, end_block, retries, delay) -> Tuple[int,
     :param retries: How many times we retry
     :param delay: Time to sleep between retries
     """
+
     for i in range(retries):
         try:
             return end_block, func(start_block, end_block)
@@ -359,6 +372,7 @@ def _retry_web3_call(func, start_block, end_block, retries, delay) -> Tuple[int,
             # Assume this is HTTPConnectionPool(host='localhost', port=8545): Read timed out. (read timeout=10)
             # from Go Ethereum. This translates to the error "context was cancelled" on the server side:
             # https://github.com/ethereum/go-ethereum/issues/20426
+            current_block = web3.eth.block_number
             if i < retries - 1:
                 # Give some more verbose info than the default middleware
                 logger.warning(
@@ -370,13 +384,18 @@ def _retry_web3_call(func, start_block, end_block, retries, delay) -> Tuple[int,
                     delay,
                 )
                 # Decrease the `eth_getBlocks` range
-                end_block = start_block + ((end_block - start_block) // 2)
+                if current_block < end_block:
+                    raise ChainFinished()
+                else:
+                    end_block = start_block + ((end_block - start_block) // 2)
                 # Let the JSON-RPC to recover e.g. from restart
-                time.sleep(delay)
+                asyncio.sleep(delay)
                 continue
             else:
-                logger.warning("Out of retries")
-                raise
+                if current_block < end_block:
+                    raise ChainFinished()
+                else:
+                    logger.warning("Out of retries")
 
 
 def _fetch_events_for_all_contracts(
@@ -510,8 +529,7 @@ class DatabasedState(EventScannerState):
         idx, txhash, block_number, data = event
         x, y = data["location"]
         colony_id = data["colony_id"]
-        logger.info(f"adding [{colony_id}] at ({x}, {y})")
-        output = self.database.write(x, y, colony_id)
+        self.database.write(x, y, colony_id)
 
         # Return a pointer that allows us to look up this event later if needed
         return str(f"{block_number}-{txhash}-{idx}")
