@@ -107,6 +107,7 @@ async def get_event(config, state):
                 }
             )
         )
+        await ws.recv()
         while True:
             try:
                 message = json.loads(await asyncio.wait_for(ws.recv(), timeout=60))
