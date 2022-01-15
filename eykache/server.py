@@ -28,19 +28,23 @@ class Routes:
                 self (Routes): An instance of Routes
                 request (aiohttp.web_request.Request): The web request
         """
-        data = await request.json()
-        xmin, ymin, xmax, ymax = (
-            int(data["xmin"]),
-            int(data["ymin"]),
-            int(data["xmax"]),
-            int(data["ymax"]),
-        )
         output = []
-        for pack in self.database.get_plots(xmin, ymin, xmax, ymax):
-            colony_id, point_str = pack
-            for point in re.findall("(-*[0-9]+ -*[0-9]+)", point_str):
-                x, y = point.split(" ")
-                output.append({"colony_id": colony_id, "x": int(x), "y": int(y)})
-                break
+        try:
+            data = await request.json()
+            xmin, ymin, xmax, ymax = (
+                int(data["xmin"]),
+                int(data["ymin"]),
+                int(data["xmax"]),
+                int(data["ymax"]),
+            )
+
+            for pack in self.database.get_plots(xmin, ymin, xmax, ymax):
+                colony_id, point_str = pack
+                for point in re.findall("(-*[0-9]+ -*[0-9]+)", point_str):
+                    x, y = point.split(" ")
+                    output.append({"colony_id": colony_id, "x": int(x), "y": int(y)})
+                    break
+        except:
+            pass
 
         return web.json_response(output)
