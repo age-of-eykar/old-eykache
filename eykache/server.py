@@ -38,6 +38,11 @@ class Routes:
                 int(data["ymax"]),
             )
 
+            assert xmin < xmax
+            assert ymin < ymax
+            assert xmax - xmin > 2 ** 16
+            assert ymax - ymin > 2 ** 16
+
             for pack in self.database.get_plots(xmin, ymin, xmax, ymax):
                 colony_id, point_str = pack
                 for point in re.findall("(-*[0-9]+ -*[0-9]+)", point_str):
