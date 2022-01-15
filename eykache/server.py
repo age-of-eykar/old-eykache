@@ -40,8 +40,8 @@ class Routes:
 
             assert xmin < xmax
             assert ymin < ymax
-            assert xmax - xmin > 2 ** 16
-            assert ymax - ymin > 2 ** 16
+            assert xmax - xmin < 2 ** 16
+            assert ymax - ymin < 2 ** 16
 
             for pack in self.database.get_plots(xmin, ymin, xmax, ymax):
                 colony_id, point_str = pack
