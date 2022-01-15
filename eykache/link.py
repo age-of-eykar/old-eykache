@@ -1,7 +1,6 @@
 import time
 import logging
 import json
-import requests
 from . import utils
 from web3 import Web3
 from .scanner import DatabasedState, EventScanner, ChainFinished
@@ -9,7 +8,6 @@ from tqdm import tqdm
 from web3.middleware import geth_poa_middleware  # only needed for PoA networks like BSC
 from websockets import connect
 import asyncio
-import traceback
 
 
 async def start(database, config):
@@ -126,5 +124,5 @@ async def get_event(config, state):
                 )
                 state.process_event(event)
                 pass
-            except Exception as e:
-                traceback.print_exc()
+            except Exception:
+                pass
