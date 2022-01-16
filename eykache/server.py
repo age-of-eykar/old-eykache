@@ -15,14 +15,14 @@ def setup(app, config, database):
             )
         },
     )
-    for route in list(routes):
-        cors.add(route)
     app.add_routes(
         [
             web.get("/colonies", routes.colonies),
             web.post("/colonies", routes.colonies),
         ]
     )
+    for route in list(app.router.routes()):
+        cors.add(route)
 
 
 class Routes:
