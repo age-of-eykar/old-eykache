@@ -1,9 +1,22 @@
 from aiohttp import web
+import aiohttp_cors
 import re
 
 
 def setup(app, config, database):
     routes = Routes(config, database)
+    cors = aiohttp_cors.setup(
+        app,
+        defaults={
+            "*": aiohttp_cors.ResourceOptions(
+                allow_credentials=True,
+                expose_headers="*",
+                allow_headers="*",
+            )
+        },
+    )
+    for route in list(routes):
+        cors.add(route)
     app.add_routes(
         [
             web.get("/colonies", routes.colonies),

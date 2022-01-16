@@ -13,6 +13,7 @@ let
     requirements = ''
       cython
       aiohttp
+      aiohttp_cors
       psycopg2
       toml
       tqdm
