@@ -7,6 +7,7 @@ def setup(app, config, database):
     app.add_routes(
         [
             web.get("/colonies", routes.colonies),
+            web.post("/colonies", routes.colonies),
         ]
     )
 
